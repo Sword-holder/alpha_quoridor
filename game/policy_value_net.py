@@ -8,9 +8,11 @@ from torch.autograd import Variable
 
 SIZE = 7
 # 棋盘长度
-BOARD_WIDTH = (2 * SIZE - 1)
+BOARD_WIDTH = 2 * SIZE - 1
 # 输入的状态空间大小
 BOARD_SIZE = BOARD_WIDTH * BOARD_WIDTH
+# 挡板动作空间大小
+WALLS_SIZE = (SIZE - 1) * (SIZE - 1)
 # 动作空间大小
 ACTION_SIZE = 16 + 2 * WALLS_SIZE
 
@@ -43,7 +45,7 @@ class Net(nn.Module):
             输入为17 * 17 * 4的状态空间
         '''
         # 公共部分
-        x = F.relu(self.conv1(state_input))
+        x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         # 策略网络部分

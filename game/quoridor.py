@@ -44,6 +44,9 @@ class Quoridor(object):
     WALL_NUMBER = 8
 
     def __init__(self):
+        self.init_board()
+
+    def init_board(self):
         # _self_loc和_oppo_loc表示棋子的位置，均为二维棋盘的线性展开
         # 初始状态下，我方位于第一排正中间，对方位于最后一排正中间
         self._p1_loc = self.SIZE // 2
@@ -66,10 +69,10 @@ class Quoridor(object):
             检查游戏是否结束，若结束，返回player编号，否则返回None
         '''
         if self._p1_loc // self.SIZE == self.SIZE - 1:
-            return 1, 
+            return True, 1, 
         if self._p2_loc // self.SIZE == 0:
-            return -1
-        return None
+            return True, -1
+        return False, 0
 
     def valid_actions(self):
         '''
@@ -102,6 +105,8 @@ class Quoridor(object):
             self._place_wall(action - 16 - self.WALLS_SIZE, d=2)
         else:
             print('Error: invalid action!')
+        
+        self.alter()
 
     def _move(self, forward):
         '''
@@ -362,8 +367,7 @@ class Quoridor(object):
         '''
         # 首先生成单个的棋盘
         board = self._integerate_state()
-        state = np.zeros(shape=(4, self.SIZE, self.SIZE), dtype=np.int8)
-        state[0] = board
+        state = np.zeros(shape=(4, self.STATE_BOARD_SIZE, self.STATE_BOARD_SIZE), dtype=np.int8)
         for i in range(len(state)):
             for j in range(len(state[0])):
                 state[board[i][j] - 1] = 1
@@ -374,9 +378,8 @@ class Quoridor(object):
             生成单个的棋盘，0表示没有东西，1表示竖向挡板，2表示横向挡板，3表示我方位置，4表示对方位置
         '''
         board = np.zeros(shape=(self.STATE_BOARD_SIZE, self.STATE_BOARD_SIZE), dtype=np.int8)
-
-        board[self._p1_loc // self.SIZE * 2][(self._p1_loc % self.SIZE) * 2] = 3
-        board[self._p2_loc // self.SIZE * 2][(self._p2_loc % self.SIZE) * 2] = 4
+        board[(self._p1_loc // self.SIZE) * 2][(self._p1_loc % self.SIZE) * 2] = 3
+        board[(self._p2_loc // self.SIZE) * 2][(self._p2_loc % self.SIZE) * 2] = 4
         for i, w in enumerate(self._walls):
             if w == 1:
                 row = i // (self.SIZE - 1) * 2 + 1
