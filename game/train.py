@@ -37,7 +37,7 @@ class TrainPipeline():
         self.pure_mcts_playout_num = 1000
         if init_model:
             # start training from an initial policy-value net
-            self.policy_value_net = PolicyValueNet(model_file=init_model)
+            self.policy_value_net = PolicyValueNet(model_file=init_model, use_gpu=True)
         else:
             # start training from a new policy-value net
             self.policy_value_net = PolicyValueNet()
@@ -165,7 +165,7 @@ class TrainPipeline():
                     print("current self-play batch: {}".format(i+1))
                     # win_ratio = self.policy_evaluate(n_games=1)
                     self.policy_value_net.save_model('./best_policy.model')
-                    self.policy_value_net = PolicyValueNet('./best_policy.model')
+                    self.policy_value_net = PolicyValueNet('./best_policy.model', use_gpu=True)
                     # if win_ratio > self.best_win_ratio:
                     #     print("New best policy!!!!!!!!")
                     #     self.best_win_ratio = win_ratio
@@ -180,5 +180,5 @@ class TrainPipeline():
 
 
 if __name__ == '__main__':
-    training_pipeline = TrainPipeline()
+    training_pipeline = TrainPipeline('./best_policy.model')
     training_pipeline.run()
