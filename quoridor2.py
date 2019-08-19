@@ -2,8 +2,6 @@ from queue import Queue
 import numpy as np
 import time
 
-INF = 10000000
-
 def record_time(func):
     def dec(*args, **kw):
         start = time.time()
@@ -42,8 +40,6 @@ class Quoridor(object):
     # 完整状态下，棋盘的大小
     STATE_BOARD_SIZE = 2 * SIZE - 1
 
-    MAX_STEP = 50
-
     # 初始挡板数量
     WALL_NUMBER = 8
 
@@ -53,33 +49,29 @@ class Quoridor(object):
     def init_board(self):
         # _self_loc和_oppo_loc表示棋子的位置，均为二维棋盘的线性展开
         # 初始状态下，我方位于第一排正中间，对方位于最后一排正中间
-        self._self_loc = self.SIZE // 2
-        self._oppo_loc = self.SIZE * (self.SIZE - 1) + self.SIZE // 2
-        # 我方和对方的目标
-        self._self_target = self.SIZE - 1
-        self._oppo_target = 0
+        self._p1_loc = self.SIZE // 2
+        self._p2_loc = self.SIZE * (self.SIZE - 1) + self.SIZE // 2
         # walls数组表示所有的挡板空间
         self._walls = np.zeros(self.WALLS_SIZE, dtype=np.int8)
         # player为1表示player1，-1表示player2，一开始player默认为player1
         self.player = 1
         # 每个玩家的挡板数量
         self.wall_remaining = {1:self.WALL_NUMBER, -1:self.WALL_NUMBER}
-        # 当前步数为1
-        self.step = 0
 
     def get_current_player(self):
+        '''
+            获取当前玩家
+        '''
         return self.player
 
     def check_end(self):
         '''
             检查游戏是否结束，若结束，返回player编号，否则返回None
         '''
-        if self._self_loc // self.SIZE == self._self_target:
-            return True, self.player
-        if self._oppo_loc // self.SIZE == self._oppo_target:
-            return True, -self.player
-        if self.step >= self.MAX_STEP:
-            return True, 0
+        if self._p1_loc // self.SIZE == self.SIZE - 1:
+            return True, 1, 
+        if self._p2_loc // self.SIZE == 0:
+            return True, -1
         return False, 0
 
     def valid_actions(self):
@@ -115,14 +107,15 @@ class Quoridor(object):
             print('Error: invalid action!')
         
         self.alter()
-        self.step += 1
 
     def _move(self, forward):
         '''
             移动棋子，player为1时表示我方移动，为-1时表示对手移动
             forward取值为0、1、2、3，分别表示上、右、下、左
         '''
-        self._self_loc += self.MOVE_STEP[forward]
+        loc = self._current_loc()
+        loc += self.MOVE_STEP[forward]
+        self._set_current_loc(loc)
 
     def _jump(self, d1, d2):
         '''
@@ -136,27 +129,49 @@ class Quoridor(object):
             用于在loc位置放置一个挡板，d为1时表示横向，为2时表示纵向
         '''
         self._walls[loc] = d
-        self.wall_remaining[self.player] -= 1
+        self.wall_remaining[self.get_current_player()] -= 1
 
     def _set_current_loc(self, loc):
         # 更新当前位置
-        self._self_loc = loc
+        if self.player == 1:
+            self._p1_loc = loc
+        else:
+            self._p2_loc = loc
+
+    def _current_loc(self):
+        '''
+            获得当前玩家的位置
+        '''
+        return self._p1_loc if self.player == 1 else self._p2_loc
+
+    def _oppo_loc(self):
+        '''
+            获得对方玩家的位置
+        '''
+        return self._p1_loc if self.player == 2 else self._p2_loc
+
+    def _player_loc(self):
+        '''
+            获得双方玩家的位置
+            返回一个二元组，第一个元素是当前玩家位置，第二个元素是对方玩家的位置
+        '''
+        loc = [self._p1_loc, self._p2_loc]
+        return loc[::self.player]
 
     def alter(self):
         '''
             轮换当前下棋的玩家
         '''
-        self._walls = np.flipud(self._walls)
-        self._self_loc = self.BOARD_SIZE - 1 - self._self_loc
-        self._oppo_loc = self.BOARD_SIZE - 1 - self._oppo_loc
-        self._self_loc, self._oppo_loc = self._oppo_loc, self._self_loc
         self.player = -self.player
 
     def _valid_moves(self):
         '''
             获取所有合法移动列表
         '''
-        valid_moves = [i for i in range(4) if self._legal_mvoe(i)]
+        valid_moves = []
+        for i in range(4):
+            if self._legal_mvoe(i):
+                valid_moves.append(i)
         return valid_moves
 
     def _valid_jumps(self):
@@ -164,11 +179,11 @@ class Quoridor(object):
             获取所有合法跳跃列表
         '''
         jumps = []
+        locs = self._player_loc()
         try:
-            ind = self.MOVE_STEP.index(self._oppo_loc - self._self_loc)
+            ind = self.MOVE_STEP.index(locs[1] - locs[0])
             # 如果自身与对手相邻，假装走到对手的位置，获取所有合法移动
-            loc_cpy = self._self_loc
-            self._self_loc = self._oppo_loc
+            self._set_current_loc(locs[1])
             sim_moves = self._valid_moves()
             jump_step = [self.SIZE, 1, -self.SIZE, -1]
             jump_step.pop((ind + 2) % 4)
@@ -178,10 +193,9 @@ class Quoridor(object):
                     jumps.append(4 + 3 * ind + j)
                 except ValueError:
                     continue
-            self._self_loc = loc_cpy
         except ValueError:
             pass
-        
+            
         return jumps
     
     def _valid_walls(self):
@@ -189,7 +203,7 @@ class Quoridor(object):
             获取所有合法放置挡板的动作列表
         '''
         # 先判断是否还有挡板可以放
-        if self.wall_remaining[self.player] == 0: return []
+        if self.wall_remaining[self.get_current_player()] == 0: return []
         valid_walls = []
         for i in range(self.WALLS_SIZE):
             if self._walls[i] == 0:
@@ -225,7 +239,7 @@ class Quoridor(object):
         '''
             判断当前棋局是否堵塞了游戏中的两个棋子
         '''
-        return self._block_place(self._self_loc, dest=self._self_target) or self._block_place(self._oppo_loc, dest=self._oppo_target)
+        return self._block_place(self._p1_loc, dest=self.SIZE - 1) or self._block_place(self._p2_loc, dest=0)
 
     def _block_place(self, place, dest):
         '''
@@ -236,60 +250,23 @@ class Quoridor(object):
         row = place // self.SIZE
         col = place % self.SIZE
         visited = np.zeros(shape=(self.SIZE, self.SIZE), dtype=np.int8)
-        return not self._dfs(row, col, dest, visited, step=0)
-
-    def self_distance(self):
-        dis = self._bfs(self._self_loc // self.SIZE, self._self_loc % self.SIZE, self._self_target)
-        if dis == -1:
-            dis = INF
-        return dis
-
-    def oppo_distance(self):
-        dis = self._bfs(self._oppo_loc // self.SIZE, self._oppo_loc % self.SIZE, self._oppo_target)
-        if dis == -1:
-            dis = -INF
-        return dis
+        return not self._dfs(row, col, dest, visited)
     
-    def _bfs(self, row, col, dest):
-        q = Queue()
-        q.put((row, col, 0))
-        while not q.empty():
-            row, col, step = q.get()
-            if row == dest:
-                return step
-            # print('row = ', row, ', col = ', col, ', step = ', step)
-            
-
-            place = row * self.SIZE + col
-            left = place - 1
-            right = place + 1
-            up = place + self.SIZE
-            down = place - self.SIZE
-
-            if row != self.SIZE - 1 and not self._has_wall_crossed(place, up):
-                q.put((row + 1, col, step + 1))
-            if row != 0 and not self._has_wall_crossed(place, down):
-                q.put((row - 1, col, step + 1))
-            if col != 0 and not self._has_wall_crossed(place, left):
-                q.put((row, col - 1, step + 1))
-            if col != self.SIZE - 1 and not self._has_wall_crossed(place, right):
-                q.put((row, col + 1, step + 1))
-        return -1
-
-    def _dfs(self, row, col, dest, visited, step):
+    def _dfs(self, row, col, dest, visited):
         '''
             从row行col列开始进行深度优先搜索，搜到dest行后，返回True，否则返回False
         '''
         if row == dest:
-            return step
+            return True
         if row < 0 or row >= self.SIZE:
-            return 0
+            return False
         if col < 0 or col >= self.SIZE:
-            return 0
+            return False
         if visited[row][col] == 1:
-            return 0
+            return False
+        
         visited[row][col] = 1
-        connected = 0
+        connected = False
 
         place = row * self.SIZE + col
         left = place - 1
@@ -301,13 +278,13 @@ class Quoridor(object):
         priority = 1 if forward else -1
 
         if row != (0, self.SIZE - 1)[forward] and not self._has_wall_crossed(place, (down, up)[forward]):
-            connected += self._dfs(row + priority, col, dest, visited, step + 1)
-        if col != 0 and not self._has_wall_crossed(place, left) and connected == 0:
-            connected += self._dfs(row, col - 1, dest, visited, step + 1)
-        if col != self.SIZE - 1 and not self._has_wall_crossed(place, right) and connected == 0:
-            connected += self._dfs(row, col + 1, dest, visited, step + 1)
+            connected = connected or self._dfs(row + priority, col, dest, visited)
+        if col != 0 and not self._has_wall_crossed(place, left):
+            connected = connected or self._dfs(row, col - 1, dest, visited)
+        if col != self.SIZE - 1 and not self._has_wall_crossed(place, right):
+            connected = connected or self._dfs(row, col + 1, dest, visited)
         if row != (0, self.SIZE - 1)[1 - forward] and not self._has_wall_crossed(place, (down, up)[1 - forward]):
-            connected += self._dfs(row - priority, col, dest, visited, step + 1)
+            connected = connected or self._dfs(row - priority, col, dest, visited)
 
         return connected
 
@@ -317,21 +294,22 @@ class Quoridor(object):
             d取值为0、1、2、3，分别表示上、右、下、左
             返回一个布尔值
         '''
+        locs = self._player_loc()
         # 计算移动后的位置
-        move_loc = self._self_loc + self.MOVE_STEP[d]
+        move_loc = locs[0] + self.MOVE_STEP[d]
         # 走到了框外，则非法
         if move_loc < 0 or move_loc >= self.BOARD_SIZE:
             return False
         # 走到了左右两边的格子外，则非法
-        if self._self_loc % self.SIZE == 0 and move_loc % self.SIZE == self.SIZE - 1:
+        if locs[0] % self.SIZE == 0 and move_loc % self.SIZE == self.SIZE - 1:
             return False
-        if self._self_loc % self.SIZE == self.SIZE - 1 and move_loc % self.SIZE == 0:
+        if locs[0] % self.SIZE == self.SIZE - 1 and move_loc % self.SIZE == 0:
             return False
         # 如果移动后会与对手的位置重合，则非法
-        if move_loc == self._oppo_loc:
+        if move_loc == locs[1]:
             return False
         # 如果挡板挡住了移动的方向，则非法
-        if self._has_wall_crossed(self._self_loc, move_loc):
+        if self._has_wall_crossed(locs[0], move_loc):
             return False
         
         return True
@@ -375,7 +353,7 @@ class Quoridor(object):
         '''
         board = self._integerate_state()
         board = board[::-1]
-        char_dic = ['. ', '1 ', '2 ', '3 ', '4 ']
+        char_dic = ['.', '1', '2', '3', '4']
         for i in range(self.STATE_BOARD_SIZE):
             for j in range(self.STATE_BOARD_SIZE):
                 print(char_dic[board[i][j]], end='')
@@ -400,8 +378,8 @@ class Quoridor(object):
             生成单个的棋盘，0表示没有东西，1表示竖向挡板，2表示横向挡板，3表示我方位置，4表示对方位置
         '''
         board = np.zeros(shape=(self.STATE_BOARD_SIZE, self.STATE_BOARD_SIZE), dtype=np.int8)
-        board[(self._self_loc // self.SIZE) * 2][(self._self_loc % self.SIZE) * 2] = 3
-        board[(self._oppo_loc // self.SIZE) * 2][(self._oppo_loc % self.SIZE) * 2] = 4
+        board[(self._p1_loc // self.SIZE) * 2][(self._p1_loc % self.SIZE) * 2] = 3
+        board[(self._p2_loc // self.SIZE) * 2][(self._p2_loc % self.SIZE) * 2] = 4
         for i, w in enumerate(self._walls):
             if w == 1:
                 row = i // (self.SIZE - 1) * 2 + 1
@@ -422,17 +400,12 @@ def start_game():
     q = Quoridor()
     while True:
         q.print_board()
-        print('self location: ', q._self_loc)
-        print('opponent location: ', q._oppo_loc)
         print(q.valid_actions())
-        print('self location: ', q._self_loc)
-        print('opponent location: ', q._oppo_loc)
         action = int(input('please input action code:'))
         q.take_action(action)
-        end, winner = q.check_end()
-        if end:
-            print('Game over, winner is ', winner)
+        if q.check_end():
             break
+        q.alter()
 
 def test():
     q = Quoridor()
@@ -444,8 +417,6 @@ def test():
     # q.take_action(56)
     q.print_board()
     print(sorted(q.valid_actions()))
-    print(q._self_loc)
-    print(q._oppo_loc)
 
 if __name__ == '__main__':
-    start_game()
+    test()

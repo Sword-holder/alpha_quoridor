@@ -16,7 +16,7 @@ def policy_value_fn(board):
     # return uniform probabilities and 0 score for pure MCTS
     availables = board.valid_actions()
     action_probs = np.ones(len(availables)) / len(availables)
-    return zip(board.availables, action_probs), 0
+    return zip(availables, action_probs), 0
 
 class TreeNode(object):
     """A node in the MCTS tree. Each node keeps track of its own value Q,
@@ -120,7 +120,7 @@ class MCTS(object):
 
         action_probs, _ = self._policy(state)
         # Check for end of game
-        end = state.check_end()
+        end, winner = state.check_end()
         if not end:
             node.expand(action_probs)
         # Evaluate the leaf node by random rollout
@@ -135,8 +135,8 @@ class MCTS(object):
         """
         player = state.get_current_player()
         for i in range(limit):
-            winner = state.check_end()
-            if winner:
+            end, winner = state.check_end()
+            if end:
                 break
             action_probs = rollout_policy_fn(state)
             max_action = max(action_probs, key=itemgetter(1))[0]

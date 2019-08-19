@@ -107,6 +107,8 @@ class MCTS(object):
                 break
             # Greedily select next move.
             action, node = node.select(self._c_puct)
+            if action == 2 and state._self_loc < 7:
+                print('WALLNING:!!!!!!!!!!!!!!!!!!!!!!!!')
             state.take_action(action)
 
         # Evaluate the leaf using a network which outputs a list of
